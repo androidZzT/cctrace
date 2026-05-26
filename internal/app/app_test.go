@@ -25,3 +25,16 @@ func TestRunWrappedCommandCompletes(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestParseArgsForView(t *testing.T) {
+	cfg, err := ParseArgs([]string{"view", "sess_1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Provider != "view" {
+		t.Fatalf("Provider = %q", cfg.Provider)
+	}
+	if len(cfg.Command) != 1 || cfg.Command[0] != "sess_1" {
+		t.Fatalf("Command = %#v", cfg.Command)
+	}
+}

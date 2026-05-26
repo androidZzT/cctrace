@@ -23,6 +23,9 @@ type Config struct {
 }
 
 func ParseArgs(args []string) (Config, error) {
+	if len(args) >= 2 && args[0] == "view" {
+		return Config{Provider: "view", Command: []string{args[1]}}, nil
+	}
 	if len(args) < 3 {
 		return Config{}, fmt.Errorf("usage: cctrace claude|codex -- <command>")
 	}
@@ -42,6 +45,18 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	if cfg.Addr == "" {
 		cfg.Addr = "127.0.0.1:43177"
+	}
+	if cfg.Provider == "view" {
+		hub := server.NewHub()
+		st := store.New(cfg.StoreDir)
+		events, err := st.ReadEvents(cfg.Command[0])
+		if err != nil {
+			return err
+		}
+		for _, event := range events {
+			hub.Publish(event)
+		}
+		return server.Listen(cfg.Addr, hub)
 	}
 	sessionID := "sess_" + strings.NewReplacer(".", "", "-", "").Replace(time.Now().Format("20060102_150405.000000000"))
 	hub := server.NewHub()

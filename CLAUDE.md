@@ -2,14 +2,24 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Repository status
-
-This directory is currently empty: there are no source files, README, project configuration files, test files, or existing repository guidance to summarize.
-
 ## Commands
 
-No build, lint, test, or development commands are defined yet. Once project files are added, update this section with the package manager or build-tool commands used by the repository.
+- Run all tests: `go test ./...`
+- Run trace model tests only: `go test ./internal/trace`
+- Run a single test: `go test ./internal/app -run TestParseArgsForWrappedCommand`
+- Run the CLI in development: `go run ./cmd/cctrace claude -- <command>`
+- Run a smoke trace: `go run ./cmd/cctrace claude -- sh -c 'printf cctrace-smoke'`
+- Replay a saved session: `go run ./cmd/cctrace view <session-id>`
 
 ## Architecture
 
-No code architecture can be inferred yet because the repository has no source tree. Once implementation files are added, document the major modules, entry points, and data flow here.
+`cctrace` is a Go CLI and local web UI for profiling AI coding agent sessions. The CLI wraps Claude Code or Codex commands, records process and trace events, stores sessions as JSONL, and serves a local timeline UI.
+
+Core packages:
+
+- `internal/trace` defines the shared `Event` and `Session` model.
+- `internal/store` persists sessions and events under a session directory.
+- `internal/collectors` converts process, transcript, and ccglass records into trace events.
+- `internal/correlate` links events heuristically and marks confidence.
+- `internal/server` serves the local web UI and event JSON API.
+- `internal/app` wires CLI parsing, collection, persistence, and server startup.
