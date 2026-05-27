@@ -12,11 +12,25 @@ import (
 )
 
 type transcriptRecord struct {
-	Type      string `json:"type"`
-	Tool      string `json:"tool"`
-	ID        string `json:"id"`
-	Status    string `json:"status"`
-	Timestamp string `json:"timestamp"`
+	Type      string          `json:"type"`
+	Tool      string          `json:"tool"`
+	ID        string          `json:"id"`
+	UUID      string          `json:"uuid"`
+	Status    string          `json:"status"`
+	Timestamp string          `json:"timestamp"`
+	Message   json.RawMessage `json:"message"`
+}
+
+type claudeMessage struct {
+	Role    string          `json:"role"`
+	Content json.RawMessage `json:"content"`
+}
+
+type claudeContentBlock struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+	Name string `json:"name"`
+	ID   string `json:"id"`
 }
 
 func ParseTranscriptJSONL(sessionID, provider, file string, r io.Reader) ([]trace.Event, error) {
@@ -43,17 +57,21 @@ func ParseTranscriptJSONL(sessionID, provider, file string, r io.Reader) ([]trac
 		status := transcriptStatus(rec.Status)
 		title := rec.Tool
 		if title == "" {
-			title = rec.Type
+			title = transcriptTitle(rec)
+		}
+		correlationID := rec.ID
+		if correlationID == "" {
+			correlationID = rec.UUID
 		}
 		events = append(events, trace.Event{
-			ID:             stableID(rec.Type, rec.ID, ts),
+			ID:             stableID(rec.Type, correlationID, ts),
 			SessionID:      sessionID,
 			Type:           eventType,
 			Title:          title,
 			Timestamp:      ts,
 			Status:         status,
 			Source:         source,
-			CorrelationIDs: []string{rec.ID},
+			CorrelationIDs: []string{correlationID},
 			Confidence:     trace.ConfidenceExact,
 			Summary:        map[string]any{"provider": provider, "recordType": rec.Type, "tool": rec.Tool},
 			RawRef:         &trace.RawRef{File: file, Offset: offset},
@@ -77,9 +95,9 @@ func transcriptEventType(kind string) trace.EventType {
 		return trace.EventSkill
 	case "subagent":
 		return trace.EventSubagent
-	case "user_message":
+	case "user_message", "user":
 		return trace.EventUserMessage
-	case "agent_turn":
+	case "agent_turn", "assistant":
 		return trace.EventAgentTurn
 	default:
 		return trace.EventAgentTurn
@@ -99,6 +117,24 @@ func transcriptStatus(status string) trace.Status {
 	default:
 		return trace.StatusUnknown
 	}
+}
+
+func transcriptTitle(rec transcriptRecord) string {
+	if len(rec.Message) > 0 {
+		var message claudeMessage
+		if err := json.Unmarshal(rec.Message, &message); err == nil {
+			if rec.Type == "user" {
+				var text string
+				if err := json.Unmarshal(message.Content, &text); err == nil && text != "" {
+					return text
+				}
+			}
+			if rec.Type == "assistant" {
+				return "assistant"
+			}
+		}
+	}
+	return rec.Type
 }
 
 func parseError(sessionID string, source trace.Source, file string, offset int64, err error) trace.Event {

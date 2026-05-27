@@ -78,10 +78,64 @@ func Run(ctx context.Context, cfg Config) error {
 	go func() { _ = server.Listen(addr, hub) }()
 
 	collector := collectors.ProcessCollector{SessionID: sessionID}
-	events, _, err := collector.Run(ctx, cfg.Command)
-	for _, event := range events {
-		hub.Publish(event)
-		_ = st.AppendEvent(event)
+	started, err := collector.Start(ctx, cfg.Command)
+	if err != nil {
+		return err
 	}
-	return err
+	publish(hub, st, started.StartEvent)
+
+	watchCtx, cancelWatch := context.WithCancel(ctx)
+	defer cancelWatch()
+	if cfg.Provider == "claude" {
+		go watchClaudeTranscript(watchCtx, sessionID, hub, st)
+	}
+
+	exitEvent, _, waitErr := started.Wait()
+	cancelWatch()
+	publish(hub, st, exitEvent)
+	return waitErr
+}
+
+func watchClaudeTranscript(ctx context.Context, sessionID string, hub *server.Hub, st *store.Store) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	path, err := waitForClaudeTranscript(ctx, home, cwd)
+	if err != nil {
+		return
+	}
+	events := make(chan trace.Event, 32)
+	go func() { _ = collectors.WatchTranscript(ctx, sessionID, "claude", path, events) }()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event := <-events:
+			publish(hub, st, event)
+		}
+	}
+}
+
+func waitForClaudeTranscript(ctx context.Context, home, cwd string) (string, error) {
+	for {
+		path, err := collectors.NewestClaudeTranscript(home, cwd)
+		if err == nil {
+			return path, nil
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
+	}
+}
+
+func publish(hub *server.Hub, st *store.Store, event trace.Event) {
+	hub.Publish(event)
+	_ = st.AppendEvent(event)
 }

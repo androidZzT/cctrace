@@ -26,3 +26,19 @@ func TestRunProcessEmitsStartAndExit(t *testing.T) {
 		t.Fatalf("exit event = %#v", events[1])
 	}
 }
+
+func TestStartProcessEmitsStartBeforeWait(t *testing.T) {
+	collector := ProcessCollector{SessionID: "sess_1"}
+	started, err := collector.Start(context.Background(), []string{"sh", "-c", "sleep 1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer started.Command.Process.Kill()
+
+	if started.StartEvent.Type != trace.EventProcess || started.StartEvent.Status != trace.StatusRunning {
+		t.Fatalf("StartEvent = %#v", started.StartEvent)
+	}
+	if started.StartEvent.Summary["command"] == nil {
+		t.Fatalf("StartEvent summary missing command: %#v", started.StartEvent.Summary)
+	}
+}
