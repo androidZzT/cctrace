@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+func TestEncodeClaudeProjectPath(t *testing.T) {
+	cwd := "/Users/agentz/Workspace/cctrace/.worktrees/cctrace-mvp"
+	want := "-Users-agentz-Workspace-cctrace--worktrees-cctrace-mvp"
+	if got := encodeClaudeProjectPath(cwd); got != want {
+		t.Fatalf("encodeClaudeProjectPath() = %q, want %q", got, want)
+	}
+}
+
 func TestNewestClaudeTranscriptForCWD(t *testing.T) {
 	root := t.TempDir()
 	cwd := filepath.Join(root, "workspace", "cctrace")

@@ -16,10 +16,11 @@ import (
 )
 
 type Config struct {
-	Provider string
-	Command  []string
-	StoreDir string
-	Addr     string
+	Provider   string
+	Command    []string
+	StoreDir   string
+	Addr       string
+	SkillRoots []string
 }
 
 func ParseArgs(args []string) (Config, error) {
@@ -44,10 +45,11 @@ func Run(ctx context.Context, cfg Config) error {
 		cfg.StoreDir = filepath.Join(os.TempDir(), "cctrace-sessions")
 	}
 	if cfg.Addr == "" {
-		cfg.Addr = "127.0.0.1:43177"
+		cfg.Addr = "127.0.0.1:43179"
 	}
 	if cfg.Provider == "view" {
 		hub := server.NewHub()
+		hub.SetSession(server.SessionMetadata{ID: cfg.Command[0], Provider: "view", Mode: "history", Command: cfg.Command})
 		st := store.New(cfg.StoreDir)
 		events, err := st.ReadEvents(cfg.Command[0])
 		if err != nil {
@@ -60,11 +62,13 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	sessionID := "sess_" + strings.NewReplacer(".", "", "-", "").Replace(time.Now().Format("20060102_150405.000000000"))
 	hub := server.NewHub()
+	hub.SetSession(server.SessionMetadata{ID: sessionID, Provider: cfg.Provider, Mode: "live", Command: cfg.Command})
 	st := store.New(cfg.StoreDir)
 	session := trace.Session{ID: sessionID, Command: cfg.Command, StartedAt: time.Now()}
 	if err := st.CreateSession(session); err != nil {
 		return err
 	}
+	publishStartupSkills(hub, st, sessionID, cfg.SkillRoots)
 
 	addr := cfg.Addr
 	if strings.HasSuffix(addr, ":0") {
@@ -132,6 +136,23 @@ func waitForClaudeTranscript(ctx context.Context, home, cwd string) (string, err
 			return "", ctx.Err()
 		case <-time.After(100 * time.Millisecond):
 		}
+	}
+}
+
+func publishStartupSkills(hub *server.Hub, st *store.Store, sessionID string, roots []string) {
+	if len(roots) == 0 {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return
+		}
+		roots = collectors.DefaultSkillRoots(home)
+	}
+	events, err := collectors.CollectSkills(sessionID, roots)
+	if err != nil {
+		return
+	}
+	for _, event := range events {
+		publish(hub, st, event)
 	}
 }
 

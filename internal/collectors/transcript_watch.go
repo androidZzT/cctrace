@@ -87,5 +87,6 @@ func WatchTranscript(ctx context.Context, sessionID, provider, path string, even
 }
 
 func encodeClaudeProjectPath(cwd string) string {
-	return strings.ReplaceAll(cwd, string(filepath.Separator), "-")
+	encoded := strings.ReplaceAll(cwd, string(filepath.Separator), "-")
+	return strings.ReplaceAll(encoded, ".", "-")
 }

@@ -57,6 +57,7 @@ func (s *Store) ReadEvents(sessionID string) ([]trace.Event, error) {
 
 	var events []trace.Event
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 1024*1024), 64*1024*1024)
 	line := 0
 	for scanner.Scan() {
 		line++

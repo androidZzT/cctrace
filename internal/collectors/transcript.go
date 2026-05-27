@@ -12,13 +12,14 @@ import (
 )
 
 type transcriptRecord struct {
-	Type      string          `json:"type"`
-	Tool      string          `json:"tool"`
-	ID        string          `json:"id"`
-	UUID      string          `json:"uuid"`
-	Status    string          `json:"status"`
-	Timestamp string          `json:"timestamp"`
-	Message   json.RawMessage `json:"message"`
+	Type          string          `json:"type"`
+	Tool          string          `json:"tool"`
+	ID            string          `json:"id"`
+	UUID          string          `json:"uuid"`
+	Status        string          `json:"status"`
+	Timestamp     string          `json:"timestamp"`
+	Message       json.RawMessage `json:"message"`
+	ToolUseResult json.RawMessage `json:"toolUseResult"`
 }
 
 type claudeMessage struct {
@@ -27,10 +28,32 @@ type claudeMessage struct {
 }
 
 type claudeContentBlock struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
-	Name string `json:"name"`
-	ID   string `json:"id"`
+	Type      string          `json:"type"`
+	Text      string          `json:"text"`
+	Name      string          `json:"name"`
+	ID        string          `json:"id"`
+	Input     json.RawMessage `json:"input"`
+	Content   json.RawMessage `json:"content"`
+	ToolUseID string          `json:"tool_use_id"`
+}
+
+type claudeAgentInput struct {
+	Description  string `json:"description"`
+	Isolation    string `json:"isolation"`
+	Model        string `json:"model"`
+	Prompt       string `json:"prompt"`
+	SubagentType string `json:"subagent_type"`
+}
+
+type claudeToolUseResult struct {
+	Status            string          `json:"status"`
+	AgentID           string          `json:"agentId"`
+	AgentType         string          `json:"agentType"`
+	TotalDurationMS   int64           `json:"totalDurationMs"`
+	TotalTokens       float64         `json:"totalTokens"`
+	TotalToolUseCount float64         `json:"totalToolUseCount"`
+	ToolStats         map[string]any  `json:"toolStats"`
+	Content           json.RawMessage `json:"content"`
 }
 
 func ParseTranscriptJSONL(sessionID, provider, file string, r io.Reader) ([]trace.Event, error) {
@@ -40,6 +63,7 @@ func ParseTranscriptJSONL(sessionID, provider, file string, r io.Reader) ([]trac
 	}
 	var events []trace.Event
 	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 1024*1024), 64*1024*1024)
 	var offset int64
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -53,6 +77,16 @@ func ParseTranscriptJSONL(sessionID, provider, file string, r io.Reader) ([]trac
 		if err != nil {
 			ts = time.Now()
 		}
+		if event, ok := claudeAgentToolUseEvent(sessionID, provider, source, file, offset, rec, ts); ok {
+			events = append(events, event)
+			offset += int64(len(line) + 1)
+			continue
+		}
+		if event, ok := claudeAgentToolResultEvent(sessionID, provider, source, file, offset, rec, ts); ok {
+			events = append(events, event)
+			offset += int64(len(line) + 1)
+			continue
+		}
 		eventType := transcriptEventType(rec.Type)
 		status := transcriptStatus(rec.Status)
 		title := rec.Tool
@@ -62,6 +96,10 @@ func ParseTranscriptJSONL(sessionID, provider, file string, r io.Reader) ([]trac
 		correlationID := rec.ID
 		if correlationID == "" {
 			correlationID = rec.UUID
+		}
+		summary := map[string]any{"provider": provider, "recordType": rec.Type, "tool": rec.Tool}
+		if text := transcriptText(rec); text != "" {
+			summary["text"] = text
 		}
 		events = append(events, trace.Event{
 			ID:             stableID(rec.Type, correlationID, ts),
@@ -73,7 +111,7 @@ func ParseTranscriptJSONL(sessionID, provider, file string, r io.Reader) ([]trac
 			Source:         source,
 			CorrelationIDs: []string{correlationID},
 			Confidence:     trace.ConfidenceExact,
-			Summary:        map[string]any{"provider": provider, "recordType": rec.Type, "tool": rec.Tool},
+			Summary:        summary,
 			RawRef:         &trace.RawRef{File: file, Offset: offset},
 		})
 		offset += int64(len(line) + 1)
@@ -106,7 +144,7 @@ func transcriptEventType(kind string) trace.EventType {
 
 func transcriptStatus(status string) trace.Status {
 	switch status {
-	case "ok", "success":
+	case "ok", "success", "completed":
 		return trace.StatusOK
 	case "error", "failed":
 		return trace.StatusError
@@ -120,21 +158,165 @@ func transcriptStatus(status string) trace.Status {
 }
 
 func transcriptTitle(rec transcriptRecord) string {
+	if text := transcriptText(rec); text != "" {
+		return text
+	}
 	if len(rec.Message) > 0 {
 		var message claudeMessage
 		if err := json.Unmarshal(rec.Message, &message); err == nil {
-			if rec.Type == "user" {
-				var text string
-				if err := json.Unmarshal(message.Content, &text); err == nil && text != "" {
-					return text
-				}
-			}
 			if rec.Type == "assistant" {
 				return "assistant"
 			}
 		}
 	}
 	return rec.Type
+}
+
+func transcriptText(rec transcriptRecord) string {
+	if len(rec.Message) == 0 {
+		return ""
+	}
+	var message claudeMessage
+	if err := json.Unmarshal(rec.Message, &message); err != nil {
+		return ""
+	}
+	var text string
+	if err := json.Unmarshal(message.Content, &text); err == nil {
+		return text
+	}
+	return claudeTextFromRawContent(message.Content)
+}
+
+func claudeAgentToolUseEvent(sessionID, provider string, source trace.Source, file string, offset int64, rec transcriptRecord, ts time.Time) (trace.Event, bool) {
+	if rec.Type != "assistant" || len(rec.Message) == 0 {
+		return trace.Event{}, false
+	}
+	var message claudeMessage
+	if err := json.Unmarshal(rec.Message, &message); err != nil {
+		return trace.Event{}, false
+	}
+	var blocks []claudeContentBlock
+	if err := json.Unmarshal(message.Content, &blocks); err != nil {
+		return trace.Event{}, false
+	}
+	for _, block := range blocks {
+		if block.Type != "tool_use" || block.Name != "Agent" {
+			continue
+		}
+		var input claudeAgentInput
+		if err := json.Unmarshal(block.Input, &input); err != nil {
+			return trace.Event{}, false
+		}
+		title := "Agent"
+		if input.SubagentType != "" && input.Description != "" {
+			title = input.SubagentType + ": " + input.Description
+		} else if input.Description != "" {
+			title = input.Description
+		} else if input.SubagentType != "" {
+			title = input.SubagentType
+		}
+		return trace.Event{
+			ID:             stableID("subagent", block.ID, ts),
+			SessionID:      sessionID,
+			Type:           trace.EventSubagent,
+			Title:          title,
+			Timestamp:      ts,
+			Status:         trace.StatusRunning,
+			Source:         source,
+			CorrelationIDs: []string{block.ID},
+			Confidence:     trace.ConfidenceExact,
+			Summary: map[string]any{
+				"provider":     provider,
+				"recordType":   rec.Type,
+				"phase":        "start",
+				"tool":         block.Name,
+				"description":  input.Description,
+				"subagentType": input.SubagentType,
+				"prompt":       input.Prompt,
+				"model":        input.Model,
+				"isolation":    input.Isolation,
+			},
+			RawRef: &trace.RawRef{File: file, Offset: offset},
+		}, true
+	}
+	return trace.Event{}, false
+}
+
+func claudeAgentToolResultEvent(sessionID, provider string, source trace.Source, file string, offset int64, rec transcriptRecord, ts time.Time) (trace.Event, bool) {
+	if len(rec.ToolUseResult) == 0 {
+		return trace.Event{}, false
+	}
+	var result claudeToolUseResult
+	if err := json.Unmarshal(rec.ToolUseResult, &result); err != nil || result.AgentType == "" {
+		return trace.Event{}, false
+	}
+	var toolUseID string
+	if len(rec.Message) > 0 {
+		var message claudeMessage
+		if err := json.Unmarshal(rec.Message, &message); err == nil {
+			var blocks []claudeContentBlock
+			if err := json.Unmarshal(message.Content, &blocks); err == nil {
+				for _, block := range blocks {
+					if block.ToolUseID != "" {
+						toolUseID = block.ToolUseID
+						break
+					}
+				}
+			}
+		}
+	}
+	correlationIDs := []string{}
+	if toolUseID != "" {
+		correlationIDs = append(correlationIDs, toolUseID)
+	}
+	if result.AgentID != "" {
+		correlationIDs = append(correlationIDs, result.AgentID)
+	}
+	if len(correlationIDs) == 0 && rec.UUID != "" {
+		correlationIDs = append(correlationIDs, rec.UUID)
+	}
+	var duration *int64
+	if result.TotalDurationMS > 0 {
+		duration = &result.TotalDurationMS
+	}
+	return trace.Event{
+		ID:             stableID("subagent_result", strings.Join(correlationIDs, "_"), ts),
+		SessionID:      sessionID,
+		Type:           trace.EventSubagent,
+		Title:          result.AgentType + " result",
+		Timestamp:      ts,
+		DurationMS:     duration,
+		Status:         transcriptStatus(result.Status),
+		Source:         source,
+		CorrelationIDs: correlationIDs,
+		Confidence:     trace.ConfidenceExact,
+		Summary: map[string]any{
+			"provider":          provider,
+			"recordType":        rec.Type,
+			"phase":             "result",
+			"agentId":           result.AgentID,
+			"agentType":         result.AgentType,
+			"result":            claudeTextFromRawContent(result.Content),
+			"totalTokens":       result.TotalTokens,
+			"totalToolUseCount": result.TotalToolUseCount,
+			"toolStats":         result.ToolStats,
+		},
+		RawRef: &trace.RawRef{File: file, Offset: offset},
+	}, true
+}
+
+func claudeTextFromRawContent(raw json.RawMessage) string {
+	var blocks []claudeContentBlock
+	if err := json.Unmarshal(raw, &blocks); err != nil {
+		return ""
+	}
+	var texts []string
+	for _, block := range blocks {
+		if block.Text != "" {
+			texts = append(texts, block.Text)
+		}
+	}
+	return strings.Join(texts, "\n")
 }
 
 func parseError(sessionID string, source trace.Source, file string, offset int64, err error) trace.Event {
