@@ -35,6 +35,7 @@ type claudeContentBlock struct {
 	Input     json.RawMessage `json:"input"`
 	Content   json.RawMessage `json:"content"`
 	ToolUseID string          `json:"tool_use_id"`
+	IsError   bool            `json:"is_error"`
 }
 
 type claudeAgentInput struct {
@@ -84,6 +85,11 @@ func ParseTranscriptJSONL(sessionID, provider, file string, r io.Reader) ([]trac
 		}
 		if event, ok := claudeAgentToolResultEvent(sessionID, provider, source, file, offset, rec, ts); ok {
 			events = append(events, event)
+			offset += int64(len(line) + 1)
+			continue
+		}
+		if parsed, ok := claudeNativeToolEvents(sessionID, provider, source, file, offset, rec, ts); ok {
+			events = append(events, parsed...)
 			offset += int64(len(line) + 1)
 			continue
 		}
@@ -303,6 +309,146 @@ func claudeAgentToolResultEvent(sessionID, provider string, source trace.Source,
 		},
 		RawRef: &trace.RawRef{File: file, Offset: offset},
 	}, true
+}
+
+func claudeNativeToolEvents(sessionID, provider string, source trace.Source, file string, offset int64, rec transcriptRecord, ts time.Time) ([]trace.Event, bool) {
+	if len(rec.Message) == 0 {
+		return nil, false
+	}
+	var message claudeMessage
+	if err := json.Unmarshal(rec.Message, &message); err != nil {
+		return nil, false
+	}
+	var blocks []claudeContentBlock
+	if err := json.Unmarshal(message.Content, &blocks); err != nil {
+		return nil, false
+	}
+	var events []trace.Event
+	if text := claudeTextBlocks(blocks); text != "" {
+		correlationID := rec.ID
+		if correlationID == "" {
+			correlationID = rec.UUID
+		}
+		events = append(events, trace.Event{
+			ID:             stableID(rec.Type, correlationID, ts),
+			SessionID:      sessionID,
+			Type:           transcriptEventType(rec.Type),
+			Title:          truncateText(text, 96),
+			Timestamp:      ts,
+			Status:         transcriptStatus(rec.Status),
+			Source:         source,
+			CorrelationIDs: []string{correlationID},
+			Confidence:     trace.ConfidenceExact,
+			Summary:        map[string]any{"provider": provider, "recordType": rec.Type, "tool": rec.Tool, "text": text},
+			RawRef:         &trace.RawRef{File: file, Offset: offset},
+		})
+	}
+	for _, block := range blocks {
+		switch block.Type {
+		case "tool_use":
+			if block.Name == "Agent" {
+				continue
+			}
+			toolID := block.ID
+			if toolID == "" {
+				toolID = rec.UUID
+			}
+			title := block.Name
+			if title == "" {
+				title = "tool"
+			}
+			events = append(events, trace.Event{
+				ID:             stableID("tool_call", toolID, ts),
+				SessionID:      sessionID,
+				Type:           trace.EventToolCall,
+				Title:          title,
+				Timestamp:      ts,
+				Status:         trace.StatusRunning,
+				Source:         source,
+				CorrelationIDs: []string{toolID},
+				Confidence:     trace.ConfidenceExact,
+				Summary:        map[string]any{"provider": provider, "recordType": rec.Type, "tool": title, "arguments": decodeRawJSON(block.Input)},
+				RawRef:         &trace.RawRef{File: file, Offset: offset},
+			})
+		case "tool_result":
+			toolID := block.ToolUseID
+			if toolID == "" {
+				toolID = rec.ID
+			}
+			if toolID == "" {
+				toolID = rec.UUID
+			}
+			status := transcriptStatus(rec.Status)
+			if block.IsError {
+				status = trace.StatusError
+			} else if status == trace.StatusUnknown {
+				status = trace.StatusOK
+			}
+			events = append(events, trace.Event{
+				ID:             stableID("tool_result", toolID, ts),
+				SessionID:      sessionID,
+				Type:           trace.EventToolResult,
+				Title:          "tool result",
+				Timestamp:      ts,
+				Status:         status,
+				Source:         source,
+				CorrelationIDs: []string{toolID},
+				Confidence:     trace.ConfidenceExact,
+				Summary:        map[string]any{"provider": provider, "recordType": rec.Type, "tool": rec.Tool, "output": truncateText(claudeBlockOutput(block.Content), 2000)},
+				RawRef:         &trace.RawRef{File: file, Offset: offset},
+			})
+		}
+	}
+	if len(events) == 0 {
+		return nil, false
+	}
+	return events, true
+}
+
+func claudeTextBlocks(blocks []claudeContentBlock) string {
+	var texts []string
+	for _, block := range blocks {
+		if block.Type == "text" && block.Text != "" {
+			texts = append(texts, block.Text)
+		}
+	}
+	return strings.Join(texts, "\n")
+}
+
+func claudeBlockOutput(raw json.RawMessage) string {
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		return text
+	}
+	if text := claudeTextFromRawContent(raw); text != "" {
+		return text
+	}
+	if len(raw) == 0 {
+		return ""
+	}
+	return string(raw)
+}
+
+func decodeRawJSON(raw json.RawMessage) any {
+	if len(raw) == 0 {
+		return nil
+	}
+	var decoded any
+	if err := json.Unmarshal(raw, &decoded); err == nil {
+		return decoded
+	}
+	return string(raw)
+}
+
+func truncateText(text string, limit int) string {
+	runes := []rune(strings.TrimSpace(text))
+	if limit <= 0 || len(runes) <= limit {
+		return string(runes)
+	}
+	if limit == 1 {
+		return string(runes[:1])
+	}
+	return string(runes[:limit-1]) + "..."
 }
 
 func claudeTextFromRawContent(raw json.RawMessage) string {

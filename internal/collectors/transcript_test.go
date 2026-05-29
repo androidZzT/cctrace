@@ -45,6 +45,32 @@ func TestParseClaudeMessageContentSummaries(t *testing.T) {
 	}
 }
 
+func TestParseClaudeNativeToolUseAndResult(t *testing.T) {
+	input := strings.NewReader(`{"type":"assistant","uuid":"assistant_1","timestamp":"2026-05-27T01:43:43Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_read","name":"Read","input":{"file_path":"/tmp/a.md"}}]}}
+{"type":"user","uuid":"result_1","timestamp":"2026-05-27T01:43:44Z","message":{"role":"user","content":[{"tool_use_id":"toolu_read","type":"tool_result","content":[{"type":"text","text":"hello"}]}]}}
+`)
+	events, err := ParseTranscriptJSONL("sess_1", "claude", "session.jsonl", input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("len(events) = %d, want 2: %#v", len(events), events)
+	}
+	if events[0].Type != trace.EventToolCall || events[0].Title != "Read" {
+		t.Fatalf("tool call = %#v", events[0])
+	}
+	args, ok := events[0].Summary["arguments"].(map[string]any)
+	if !ok || args["file_path"] != "/tmp/a.md" {
+		t.Fatalf("arguments = %#v", events[0].Summary["arguments"])
+	}
+	if events[1].Type != trace.EventToolResult || events[1].Status != trace.StatusOK || events[1].Summary["output"] != "hello" {
+		t.Fatalf("tool result = %#v", events[1])
+	}
+	if events[0].CorrelationIDs[0] != events[1].CorrelationIDs[0] {
+		t.Fatalf("correlation ids = %#v / %#v", events[0].CorrelationIDs, events[1].CorrelationIDs)
+	}
+}
+
 func TestWatchTranscriptParsesLargeLine(t *testing.T) {
 	largeText := strings.Repeat("x", 1024*1024) + " visible tail"
 	line := `{"type":"user","uuid":"user_1","timestamp":"2026-05-27T01:43:39.055Z","message":{"role":"user","content":"` + largeText + `"}}` + "\n"
