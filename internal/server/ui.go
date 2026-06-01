@@ -853,6 +853,7 @@ function connectEventStream() {
   }
   if (!window.EventSource || sessionMetadata.mode !== 'live') return;
   eventStream = new EventSource('/api/events/stream');
+  eventStream.onopen = () => loadEvents();
   eventStream.onmessage = (message) => appendEvent(JSON.parse(message.data));
 }
 

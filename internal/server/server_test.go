@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -147,6 +148,7 @@ func TestIndexIncludesExplorerViewModelBuilders(t *testing.T) {
 		"function flushLiveRender()",
 		"requestAnimationFrame(flushLiveRender)",
 		"if (eventIds.has(event.id)) return",
+		"eventStream.onopen = () => loadEvents()",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("index HTML missing %q", want)
@@ -214,6 +216,24 @@ func TestEventsEndpointReturnsPublishedEvents(t *testing.T) {
 	}
 	if len(events) != 1 || events[0].ID != "evt_1" {
 		t.Fatalf("events = %#v", events)
+	}
+}
+
+func TestSubscribeBuffersEventBursts(t *testing.T) {
+	hub := NewHub()
+	subscriber := hub.Subscribe()
+	defer hub.Unsubscribe(subscriber)
+
+	for i := 0; i < 1024; i++ {
+		hub.Publish(trace.Event{ID: "evt_burst_" + strconv.Itoa(i), SessionID: "sess_1", Type: trace.EventProcess, Title: "burst", Timestamp: time.UnixMilli(int64(i)), Status: trace.StatusOK, Source: trace.SourceProcess, CorrelationIDs: []string{}, Confidence: trace.ConfidenceExact, Summary: map[string]any{}})
+	}
+
+	for i := 0; i < 1024; i++ {
+		select {
+		case <-subscriber:
+		default:
+			t.Fatalf("subscriber buffered %d events, want 1024", i)
+		}
 	}
 }
 

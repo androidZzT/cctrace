@@ -41,7 +41,7 @@ func (h *Hub) Publish(event trace.Event) {
 }
 
 func (h *Hub) Subscribe() chan trace.Event {
-	subscriber := make(chan trace.Event, 16)
+	subscriber := make(chan trace.Event, 1024)
 	h.mu.Lock()
 	h.subscribers[subscriber] = struct{}{}
 	h.mu.Unlock()
