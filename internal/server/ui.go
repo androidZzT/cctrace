@@ -168,6 +168,7 @@ let selectedId = '';
 let selectedCorrelationIds = [];
 let relatedOnly = false;
 let allEvents = [];
+let eventIds = new Set();
 let renderItems = [];
 let operations = [];
 let turnGroups = [];
@@ -184,6 +185,7 @@ let overviewMoveAnchor = 0;
 let overviewDragFrameStart = 0;
 let overviewDragFrameEnd = 0;
 let eventStream = null;
+let renderScheduled = false;
 
 async function loadSession() {
   const res = await fetch('/api/session');
@@ -195,6 +197,7 @@ async function loadSession() {
 async function loadEvents() {
   const res = await fetch('/api/events');
   allEvents = await res.json();
+  eventIds = new Set(allEvents.map((event) => event.id));
   rebuildViewModel();
   render();
 }
@@ -817,8 +820,20 @@ async function applyImportResponse(res, statusNode) {
 }
 
 function appendEvent(event) {
-  if (allEvents.some((item) => item.id === event.id)) return;
+  if (eventIds.has(event.id)) return;
   allEvents.push(event);
+  eventIds.add(event.id);
+  scheduleRender();
+}
+
+function scheduleRender() {
+  if (renderScheduled) return;
+  renderScheduled = true;
+  requestAnimationFrame(flushLiveRender);
+}
+
+function flushLiveRender() {
+  renderScheduled = false;
   const shouldFollow = viewportEnd >= traceEnd - 1000;
   rebuildViewModel();
   initializeViewport(renderItems);

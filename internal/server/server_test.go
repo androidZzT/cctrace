@@ -141,6 +141,12 @@ func TestIndexIncludesExplorerViewModelBuilders(t *testing.T) {
 		"summary.phase || 'skill'",
 		"item.event.type === 'subagent'",
 		"setEventTypeFilter('all')",
+		"let eventIds = new Set()",
+		"eventIds = new Set(allEvents.map((event) => event.id))",
+		"function scheduleRender()",
+		"function flushLiveRender()",
+		"requestAnimationFrame(flushLiveRender)",
+		"if (eventIds.has(event.id)) return",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("index HTML missing %q", want)
