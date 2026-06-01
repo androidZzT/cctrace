@@ -24,6 +24,12 @@
 
 ---
 
+<p align="center">
+  <img src="docs/screenshots/demo.gif" alt="cctrace waterfall timeline demo" width="900">
+</p>
+
+---
+
 ## 🤔 Why cctrace?
 
 When you run Claude Code or Codex on a tricky task, a lot is happening you can't see:
@@ -72,7 +78,9 @@ cctrace codex -- codex
 cctrace view <session-id>
 ```
 
-Open the URL the CLI prints to see the waterfall timeline in your browser.
+Wrapping an agent prints the local UI URL right away — open it to watch the live waterfall:
+
+![cctrace launching and printing the local UI URL](docs/screenshots/cli-start.png)
 
 ## 📖 CLI Reference
 
@@ -85,6 +93,10 @@ Open the URL the CLI prints to see the waterfall timeline in your browser.
 Run `cctrace --help` for full flags.
 
 ## 🏗️ Architecture
+
+Three sources flow into one shared model, get correlated with a confidence score, and land on the local timeline:
+
+![cctrace data flow: sources to collectors to unified model to correlate to UI](docs/screenshots/dataflow.png)
 
 ```
 cmd/cctrace                 CLI entry

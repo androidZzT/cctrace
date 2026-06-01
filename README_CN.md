@@ -24,6 +24,12 @@
 
 ---
 
+<p align="center">
+  <img src="docs/screenshots/demo.gif" alt="cctrace 瀑布流时间线演示" width="900">
+</p>
+
+---
+
 ## 🤔 为什么要 cctrace？
 
 用 Claude Code 或 Codex 跑一个复杂任务时，背后有很多东西你看不到：
@@ -72,7 +78,9 @@ cctrace codex -- codex
 cctrace view <session-id>
 ```
 
-打开 CLI 打印出来的 URL 就能在浏览器里看瀑布流时间线。
+包一层 agent 时会立刻打印本地 UI 的 URL，打开它就能看实时瀑布流：
+
+![cctrace 启动并打印本地 UI URL](docs/screenshots/cli-start.png)
 
 ## 📖 CLI 命令
 
@@ -85,6 +93,10 @@ cctrace view <session-id>
 `cctrace --help` 看完整参数。
 
 ## 🏗️ 架构
+
+三个来源汇进同一套模型，做关联并打置信度分，最后铺到本地时间线上：
+
+![cctrace 数据流：三源 → collectors → 统一模型 → correlate → UI](docs/screenshots/dataflow.png)
 
 ```
 cmd/cctrace                 CLI 入口
