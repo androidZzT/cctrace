@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/agentz/cctrace/internal/trace"
+	"github.com/androidZzT/cctrace/internal/trace"
 )
 
 type Store struct{ root string }

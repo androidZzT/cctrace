@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agentz/cctrace/internal/trace"
+	"github.com/androidZzT/cctrace/internal/trace"
 )
 
 func TestParseTranscriptJSONL(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/agentz/cctrace/internal/trace"
+	"github.com/androidZzT/cctrace/internal/trace"
 )
 
 func Correlate(events []trace.Event, window time.Duration) []trace.Event {

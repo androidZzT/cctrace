@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agentz/cctrace/internal/trace"
+	"github.com/androidZzT/cctrace/internal/trace"
 )
 
 func NewestClaudeTranscript(home, cwd string) (string, error) {

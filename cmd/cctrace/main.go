@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/agentz/cctrace/internal/app"
+	"github.com/androidZzT/cctrace/internal/app"
 )
 
 func main() {

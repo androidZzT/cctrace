@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/agentz/cctrace/internal/trace"
+	"github.com/androidZzT/cctrace/internal/trace"
 )
 
 type ccglassRecord struct {

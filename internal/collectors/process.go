@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"time"
 
-	"github.com/agentz/cctrace/internal/trace"
+	"github.com/androidZzT/cctrace/internal/trace"
 )
 
 type ProcessCollector struct{ SessionID string }

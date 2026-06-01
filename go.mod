@@ -1,3 +1,3 @@
-module github.com/agentz/cctrace
+module github.com/androidZzT/cctrace
 
 go 1.22

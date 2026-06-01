@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agentz/cctrace/internal/collectors"
-	"github.com/agentz/cctrace/internal/trace"
+	"github.com/androidZzT/cctrace/internal/collectors"
+	"github.com/androidZzT/cctrace/internal/trace"
 )
 
 type SessionImportRequest struct {

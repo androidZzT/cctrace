@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/agentz/cctrace/internal/collectors"
-	"github.com/agentz/cctrace/internal/server"
-	"github.com/agentz/cctrace/internal/store"
-	"github.com/agentz/cctrace/internal/trace"
+	"github.com/androidZzT/cctrace/internal/collectors"
+	"github.com/androidZzT/cctrace/internal/server"
+	"github.com/androidZzT/cctrace/internal/store"
+	"github.com/androidZzT/cctrace/internal/trace"
 )
 
 type Config struct {

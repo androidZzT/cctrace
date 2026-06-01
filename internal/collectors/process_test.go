@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/agentz/cctrace/internal/trace"
+	"github.com/androidZzT/cctrace/internal/trace"
 )
 
 func TestRunProcessEmitsStartAndExit(t *testing.T) {
