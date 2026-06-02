@@ -131,6 +131,10 @@ go run ./cmd/cctrace view <session-id>
 
 [MIT](LICENSE)
 
+## 🙏 Acknowledgements
+
+cctrace reads trace records produced by [ccglass](https://github.com/jianshuo/ccglass) (by [@jianshuo](https://github.com/jianshuo), MIT) as one of its event sources, and the `cctrace <agent> -- <cmd>` ergonomics are inspired by ccglass's wrap-and-inspect approach. If you want to see exactly what your agent sends to the model, go check out ccglass — it pairs well with cctrace.
+
 ---
 
 <div align="center">

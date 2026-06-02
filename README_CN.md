@@ -131,6 +131,10 @@ go run ./cmd/cctrace view <session-id>
 
 [MIT](LICENSE)
 
+## 🙏 致谢
+
+cctrace 的事件来源之一，是读取 [ccglass](https://github.com/jianshuo/ccglass)（[@jianshuo](https://github.com/jianshuo) 出品，MIT）导出的 trace 记录；`cctrace <agent> -- <cmd>` 的命令范式也借鉴了 ccglass「包一层、看清楚」的思路。想看清 agent 到底给模型发了什么，推荐去看 ccglass，和 cctrace 搭着用很合适。
+
 ---
 
 <div align="center">
