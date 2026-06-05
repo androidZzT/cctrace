@@ -17,7 +17,6 @@
     <a href="#%EF%B8%8F-screenshots">Screenshots</a> &bull;
     <a href="#-quick-start">Quick Start</a> &bull;
     <a href="#-cli-reference">CLI</a> &bull;
-    <a href="#-data--privacy">Data & Privacy</a> &bull;
     <a href="#%EF%B8%8F-architecture">Architecture</a> &bull;
     <a href="README_CN.md">中文</a>
   </p>
@@ -92,32 +91,6 @@ Wrapping an agent prints the local UI URL right away — open it to watch the li
 | `cctrace view <session-id>` | Open a saved session in the local web UI |
 
 Run `cctrace --help` for full flags.
-
-## 🔐 Data & Privacy
-
-cctrace is local-first by design:
-
-- The web UI listens on `127.0.0.1:43179` by default.
-- Sessions are written under `/tmp/cctrace-sessions` by default.
-- Each session contains a `session.json` metadata file and an `events.jsonl` event stream.
-- cctrace does not send telemetry and does not upload traces to a hosted service.
-- The stored JSONL can include command arguments, tool outputs, transcript snippets, file paths, model metadata, and ccglass request/response timing or usage fields when those sources are available.
-
-Treat trace files like debug logs: they may contain sensitive local paths, prompts, command output, or model/tool payloads. Review or redact them before sharing.
-
-You can replay a saved session without rerunning the agent:
-
-```sh
-cctrace view <session-id>
-```
-
-The web UI can also import existing trace artifacts from the import bar:
-
-- a cctrace session directory containing `events.jsonl`
-- a Codex rollout JSONL file or rollout directory bundle
-- a Claude transcript/session folder
-
-This makes cctrace useful both as a live profiler and as a lightweight offline trace viewer.
 
 ## 🏗️ Architecture
 
