@@ -17,6 +17,7 @@
     <a href="#%EF%B8%8F-截图">截图</a> &bull;
     <a href="#-快速开始">快速开始</a> &bull;
     <a href="#-cli-命令">CLI</a> &bull;
+    <a href="#-数据与隐私">数据与隐私</a> &bull;
     <a href="#%EF%B8%8F-架构">架构</a> &bull;
     <a href="README.md">English</a>
   </p>
@@ -91,6 +92,32 @@ cctrace view <session-id>
 | `cctrace view <session-id>` | 在本地 web UI 里打开保存的会话 |
 
 `cctrace --help` 看完整参数。
+
+## 🔐 数据与隐私
+
+cctrace 默认就是本地优先：
+
+- web UI 默认监听 `127.0.0.1:43179`。
+- 会话默认写到 `/tmp/cctrace-sessions`。
+- 每个会话目录里有一个 `session.json` 元数据文件和一个 `events.jsonl` 事件流。
+- cctrace 不发遥测，也不会把 trace 上传到托管服务。
+- 落盘的 JSONL 可能包含命令参数、工具输出、transcript 片段、文件路径、模型元数据，以及 ccglass 来源里的请求/响应耗时或 usage 字段。
+
+请把 trace 文件当成调试日志看待：里面可能包含敏感路径、prompt、命令输出或模型/工具 payload。对外分享前建议先审阅或脱敏。
+
+保存过的会话可以直接回放，不需要重跑 agent：
+
+```sh
+cctrace view <session-id>
+```
+
+web UI 顶部的导入栏也可以导入已有 trace：
+
+- 包含 `events.jsonl` 的 cctrace session 目录
+- Codex rollout JSONL 文件或 rollout 目录包
+- Claude transcript / session 文件夹
+
+所以 cctrace 既可以做实时 profiler，也可以当轻量离线 trace viewer 用。
 
 ## 🏗️ 架构
 
